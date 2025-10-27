@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,11 +17,13 @@ import com.ds6.service.GradeService;
 
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GradeServiceImpl implements GradeService {
 
     private final GradeRepository gradeRepository;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Override
     @Transactional
@@ -33,7 +37,17 @@ public class GradeServiceImpl implements GradeService {
         grade.setDate(dto.date());
 
         Grade savedGrade = gradeRepository.save(grade);
-        
+
+        try {
+            String topic = "grade.created";
+            String payload = savedGrade.getId().toString();
+
+            kafkaTemplate.send(topic, payload);
+            log.info("Event 'grade.created' published for grade ID: {}", payload);
+        } catch (Exception e) {
+            log.error("Failed to publish 'grade.created' event for grade ID: {}. Error: {}", savedGrade.getId(), e.getMessage());
+        }
+
         return toDTO(savedGrade);
     }
 
